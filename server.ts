@@ -17,6 +17,30 @@ const PORT = 3000;
 
 app.use(express.json());
 
+// Middleware to normalize request URL on serverless platforms (e.g. Vercel)
+app.use((req, res, next) => {
+  console.log(`[Server Request] Method: ${req.method} | URL: ${req.url} | Path: ${req.path}`);
+  
+  // If request URL doesn't start with /api but is an API route, prepend /api
+  if (!req.url.startsWith('/api')) {
+    const isApiRoute = 
+      req.url.startsWith('/market/') || 
+      req.url.startsWith('/gemini/') || 
+      req.url.startsWith('/binance/') || 
+      req.url.startsWith('/order/') ||
+      req.path.startsWith('/market/') ||
+      req.path.startsWith('/gemini/') ||
+      req.path.startsWith('/binance/') ||
+      req.path.startsWith('/order/');
+      
+    if (isApiRoute) {
+      req.url = '/api' + (req.url.startsWith('/') ? '' : '/') + req.url;
+      console.log(`[Normalized Request URL for Vercel] New URL: ${req.url}`);
+    }
+  }
+  next();
+});
+
 // Initialize Gemini AI Client safely
 let ai: GoogleGenAI | null = null;
 try {
