@@ -8,6 +8,7 @@ import { Asset } from './src/types';
 import {
   executeBinanceFuturesOrder,
   closeBinanceFuturesPosition,
+  getBinanceFuturesAccount,
 } from './src/utils/binance';
 
 dotenv.config();
@@ -181,6 +182,17 @@ app.get('/api/binance/config', (req, res) => {
       useTestnet,
     });
   } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 3.55 API: Get Real Binance Futures Account State (Balance, Margins, and Positions)
+app.get('/api/binance/account', async (req, res) => {
+  try {
+    const accountState = await getBinanceFuturesAccount();
+    res.json(accountState);
+  } catch (err: any) {
+    console.error('Error fetching Binance account data:', err);
     res.status(500).json({ error: err.message });
   }
 });

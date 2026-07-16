@@ -154,6 +154,40 @@ export default function App() {
     localStorage.setItem('quantcore_account_v1', JSON.stringify(account));
   }, [account]);
 
+  // Synchronize real-time account state from Binance Futures API
+  const syncRealAccount = async () => {
+    try {
+      const res = await fetch('/api/binance/account');
+      if (!res.ok) {
+        throw new Error(`HTTP Error: ${res.status}`);
+      }
+      const data = await res.json();
+      
+      if (data && data.isReal) {
+        setAccount((prev) => ({
+          ...prev,
+          walletBalance: data.walletBalance,
+          marginBalance: data.marginBalance,
+          availableBalance: data.availableBalance,
+          unrealizedPnl: data.unrealizedPnl,
+          // Sync live positions from Binance, keeping tradeHistory intact
+          positions: data.positions,
+        }));
+      }
+    } catch (err) {
+      console.error('Failed to sync real Binance account state:', err);
+    }
+  };
+
+  // Poll real Binance account details every 3 seconds when in REAL mode
+  useEffect(() => {
+    if (executionMode === 'REAL') {
+      syncRealAccount();
+      const interval = setInterval(syncRealAccount, 3000);
+      return () => clearInterval(interval);
+    }
+  }, [executionMode]);
+
   // Fetch live market state every 3 seconds
   useEffect(() => {
     const fetchState = async () => {
@@ -188,6 +222,7 @@ export default function App() {
   // Runs whenever market price of current asset changes to compute unrealized PnL & evaluate stop-loss/take-profit triggers!
   useEffect(() => {
     if (!marketState) return;
+    if (executionMode === 'REAL') return; // Skip simulated trigger evaluation in REAL mode
 
     setAccount((prev) => {
       let totalUnrealizedPnl = 0;
@@ -311,6 +346,7 @@ export default function App() {
           "AUTOMATED ORDER FILLED ON BINANCE",
           `• Asset: ${newPosData.asset}\n• Entry Price: $${entryPrice}\n• SL Target: ${newPosData.stopLoss ? '$' + newPosData.stopLoss : 'None'}\n• TP Target: ${newPosData.takeProfit ? '$' + newPosData.takeProfit : 'None'}\n\nTelegram notification alert has been dispatched successfully.`
         );
+        await syncRealAccount();
       } catch (err: any) {
         console.error('Error executing Binance order:', err);
         showAlert("BINANCE ORDER FAILURE", `Failed to execute order on Binance: ${err.message}`);
@@ -376,12 +412,13 @@ export default function App() {
             }
 
             showAlert("POSITION CLOSED", `Real position for ${posToClose.asset} successfully closed on Binance. All bracket orders have been cancelled.`);
+            executeClosePositionState(id);
+            await syncRealAccount();
           } catch (err: any) {
             console.error('Error closing real position:', err);
             showAlert("BINANCE CLOSE FAILURE", `Failed to close position on Binance: ${err.message}`);
             return;
           }
-          executeClosePositionState(id);
         }
       );
     } else {

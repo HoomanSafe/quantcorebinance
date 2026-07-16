@@ -389,3 +389,122 @@ export async function closeBinanceFuturesPosition(asset: string, side: 'LONG' | 
     throw new Error(`Failed to execute market close order on Binance: ${err.message}`);
   }
 }
+
+// 5. Fetch Real Binance Futures Account Balance and Positions
+export async function getBinanceFuturesAccount() {
+  const apiKey = process.env.BINANCE_API_KEY;
+  const apiSecret = process.env.BINANCE_API_SECRET;
+  const isKeyless = !apiKey || !apiSecret || apiKey === 'MY_BINANCE_API_KEY' || apiSecret === 'MY_BINANCE_API_SECRET' || apiKey.trim() === '' || apiSecret.trim() === '';
+
+  if (isKeyless) {
+    return {
+      isReal: false,
+      walletBalance: 10000,
+      marginBalance: 10000,
+      availableBalance: 10000,
+      unrealizedPnl: 0,
+      positions: [],
+    };
+  }
+
+  try {
+    // A. Fetch full account information
+    const accountInfo = await binanceSignedRequest('GET', '/fapi/v2/account');
+    
+    // Extract USDT asset details specifically, falling back to aggregate totals
+    const usdtAsset = (accountInfo.assets || []).find((a: any) => a.asset === 'USDT');
+    
+    const walletBalance = usdtAsset ? parseFloat(usdtAsset.walletBalance || '0') : parseFloat(accountInfo.totalWalletBalance || '0');
+    const marginBalance = usdtAsset ? parseFloat(usdtAsset.marginBalance || '0') : parseFloat(accountInfo.totalMarginBalance || '0');
+    const availableBalance = usdtAsset ? parseFloat(usdtAsset.availableBalance || '0') : parseFloat(accountInfo.availableBalance || '0');
+    const unrealizedPnl = usdtAsset ? parseFloat(usdtAsset.unrealizedProfit || '0') : parseFloat(accountInfo.totalUnrealizedProfit || '0');
+
+    // B. Parse active positions
+    const positions: any[] = [];
+    if (accountInfo.positions) {
+      for (const p of accountInfo.positions) {
+        const positionAmt = parseFloat(p.positionAmt || '0');
+        const entryPrice = parseFloat(p.entryPrice || '0');
+        
+        if (positionAmt !== 0) {
+          // Determine side
+          let side: 'LONG' | 'SHORT' = 'LONG';
+          const size = Math.abs(positionAmt);
+          
+          if (p.positionSide === 'LONG') {
+            side = 'LONG';
+          } else if (p.positionSide === 'SHORT') {
+            side = 'SHORT';
+          } else {
+            // BOTH (one-way mode)
+            side = positionAmt > 0 ? 'LONG' : 'SHORT';
+          }
+
+          const positionUnrealizedPnl = parseFloat(p.unrealizedProfit || '0');
+          const leverage = parseInt(p.leverage || '10');
+          const margin = leverage > 0 ? (size * entryPrice) / leverage : 0;
+          
+          // Estimate current mark price from the unrealized profit
+          let currentPrice = entryPrice;
+          if (size > 0) {
+            if (side === 'LONG') {
+              currentPrice = entryPrice + (positionUnrealizedPnl / size);
+            } else {
+              currentPrice = entryPrice - (positionUnrealizedPnl / size);
+            }
+          }
+          
+          const pnlPercent = margin > 0 ? (positionUnrealizedPnl / margin) * 100 : 0;
+
+          positions.push({
+            id: `real-${p.symbol}-${side}`,
+            asset: p.symbol,
+            side,
+            entryPrice: parseFloat(entryPrice.toFixed(4)),
+            currentPrice: parseFloat(currentPrice.toFixed(4)),
+            size,
+            leverage,
+            margin: parseFloat(margin.toFixed(2)),
+            unrealizedPnl: parseFloat(positionUnrealizedPnl.toFixed(2)),
+            pnlPercent: parseFloat(pnlPercent.toFixed(2)),
+            isReal: true,
+          });
+        }
+      }
+    }
+
+    // C. Fetch open stop loss / take profit bracket orders to enrich positions
+    try {
+      const openOrders = await binanceSignedRequest('GET', '/fapi/v1/openOrders');
+      for (const pos of positions) {
+        const symbolOrders = openOrders.filter((o: any) => o.symbol === pos.asset);
+        // Look for stop-market or take-profit orders
+        const slOrder = symbolOrders.find((o: any) => o.type === 'STOP_MARKET' || o.type === 'STOP');
+        const tpOrder = symbolOrders.find((o: any) => o.type === 'TAKE_PROFIT_MARKET' || o.type === 'TAKE_PROFIT');
+        
+        if (slOrder) {
+          pos.stopLoss = parseFloat(slOrder.stopPrice || '0');
+          pos.slOrderId = slOrder.orderId?.toString();
+        }
+        if (tpOrder) {
+          pos.takeProfit = parseFloat(tpOrder.stopPrice || '0');
+          pos.tpOrderId = tpOrder.orderId?.toString();
+        }
+      }
+    } catch (err) {
+      console.warn('Could not enrich position with open orders:', err);
+    }
+
+    return {
+      isReal: true,
+      walletBalance: parseFloat(walletBalance.toFixed(2)),
+      marginBalance: parseFloat(marginBalance.toFixed(2)),
+      availableBalance: parseFloat(availableBalance.toFixed(2)),
+      unrealizedPnl: parseFloat(unrealizedPnl.toFixed(2)),
+      positions,
+    };
+  } catch (err: any) {
+    console.error('Error fetching real Binance Futures account:', err);
+    throw err;
+  }
+}
