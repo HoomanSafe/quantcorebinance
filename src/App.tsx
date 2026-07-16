@@ -19,6 +19,7 @@ import {
   RefreshCw,
   Clock,
   ExternalLink,
+  AlertTriangle,
 } from 'lucide-react';
 
 export default function App() {
@@ -40,6 +41,11 @@ export default function App() {
     useTestnet: boolean;
   } | null>(null);
   const [executionMode, setExecutionMode] = useState<'SIMULATED' | 'REAL'>('SIMULATED');
+  const [binanceApiError, setBinanceApiError] = useState<{
+    code: number;
+    message: string;
+    ip: string;
+  } | null>(null);
 
   // Custom Alert & Confirm Modal Dialog state
   const [appModal, setAppModal] = useState<{
@@ -164,15 +170,20 @@ export default function App() {
       const data = await res.json();
       
       if (data && data.isReal) {
-        setAccount((prev) => ({
-          ...prev,
-          walletBalance: data.walletBalance,
-          marginBalance: data.marginBalance,
-          availableBalance: data.availableBalance,
-          unrealizedPnl: data.unrealizedPnl,
-          // Sync live positions from Binance, keeping tradeHistory intact
-          positions: data.positions,
-        }));
+        if (data.apiError) {
+          setBinanceApiError(data.apiError);
+        } else {
+          setBinanceApiError(null);
+          setAccount((prev) => ({
+            ...prev,
+            walletBalance: data.walletBalance,
+            marginBalance: data.marginBalance,
+            availableBalance: data.availableBalance,
+            unrealizedPnl: data.unrealizedPnl,
+            // Sync live positions from Binance, keeping tradeHistory intact
+            positions: data.positions,
+          }));
+        }
       }
     } catch (err) {
       console.error('Failed to sync real Binance account state:', err);
@@ -330,9 +341,16 @@ export default function App() {
           }),
         });
 
-        const result = await response.json();
-        if (!response.ok) {
-          showAlert("BINANCE EXECUTION ERROR", result.error || 'Unknown Error');
+        let result: any;
+        try {
+          result = await response.json();
+        } catch (e) {
+          showAlert("BINANCE EXECUTION ERROR", "Received an invalid non-JSON response from server.");
+          return;
+        }
+
+        if (result.error) {
+          showAlert("BINANCE EXECUTION ERROR", result.error);
           return;
         }
 
@@ -728,6 +746,48 @@ export default function App() {
           </div>
         ) : (
           <>
+            {executionMode === 'REAL' && binanceApiError && (
+              <div className="mb-4 bg-amber-500/10 border border-amber-500/30 rounded p-4 text-xs font-mono leading-relaxed text-amber-300">
+                <div className="flex items-center gap-2 font-bold uppercase text-amber-400 mb-2 text-sm">
+                  <AlertTriangle size={16} className="shrink-0 animate-bounce" />
+                  <span>Binance Futures API Authentication Failure (Code {binanceApiError.code})</span>
+                </div>
+                <p className="mb-3 text-gray-300 font-sans">
+                  The backend server was unable to fetch your real Binance account details or active positions. This usually means your API Key is invalid, has incorrect permissions, or is blocked by IP constraints:
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 bg-[#0a0c10]/85 p-3 rounded border border-amber-500/15 mb-3 text-[11px]">
+                  <div>
+                    <h4 className="font-bold text-amber-400 uppercase mb-1">1. Enable Futures</h4>
+                    <p className="text-gray-400 text-[10px] leading-tight">
+                      Open your Binance API Management, find your API key, click edit, and verify that <b>"Enable Futures"</b> is checked.
+                    </p>
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-amber-400 uppercase mb-1">2. Whitelist Server IP</h4>
+                    <p className="text-gray-400 text-[10px] leading-tight">
+                      If you restrict API access to trusted IPs, add this platform's outbound public IP: <span className="font-bold text-amber-300 select-all bg-[#161b22] px-1.5 py-0.5 rounded">{binanceApiError.ip || '34.96.48.39'}</span> to your whitelist.
+                    </p>
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-amber-400 uppercase mb-1">3. Check Environment</h4>
+                    <p className="text-gray-400 text-[10px] leading-tight">
+                      Your current setting is <b>Mainnet</b> (<code className="text-amber-200">USE_TESTNET=false</code>). If using a Testnet Key, set `USE_TESTNET="true"` in your secrets.
+                    </p>
+                  </div>
+                </div>
+                <div className="text-gray-400 text-[10px] flex flex-col md:flex-row gap-2 justify-between items-start md:items-center bg-[#161b22]/40 px-2 py-1.5 rounded">
+                  <span className="break-all"><b>API Error Message:</b> {binanceApiError.message}</span>
+                  <button 
+                    onClick={syncRealAccount} 
+                    className="shrink-0 flex items-center gap-1 text-[10px] bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-bold px-2 py-1 rounded transition-all cursor-pointer uppercase"
+                  >
+                    <RefreshCw size={10} className="animate-spin-slow" />
+                    Retry Sync
+                  </button>
+                </div>
+              </div>
+            )}
+
             {activeTab === 'TERMINAL' && (
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch">
                 {/* Left Area: Ticker info + Candlestick + Position Table */}

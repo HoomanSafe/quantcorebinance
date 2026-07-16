@@ -170,8 +170,8 @@ Analyze the user's query utilizing the latest real-time market data and paramete
 // 3.5 API: Get Binance & Telegram Environment Configuration
 app.get('/api/binance/config', (req, res) => {
   try {
-    const hasApiKey = !!process.env.BINANCE_API_KEY && process.env.BINANCE_API_KEY !== '';
-    const hasSecret = !!process.env.BINANCE_API_SECRET && process.env.BINANCE_API_SECRET !== '';
+    const hasApiKey = !!process.env.BINANCE_API_KEY && process.env.BINANCE_API_KEY !== '' && process.env.BINANCE_API_KEY !== 'MY_BINANCE_API_KEY';
+    const hasSecret = !!process.env.BINANCE_API_SECRET && process.env.BINANCE_API_SECRET !== '' && process.env.BINANCE_API_SECRET !== 'MY_BINANCE_API_SECRET';
     const hasTelegram = !!process.env.TELEGRAM_BOT_TOKEN && !!process.env.TELEGRAM_CHAT_ID;
     const useTestnet = process.env.USE_TESTNET === 'true';
 
@@ -182,7 +182,7 @@ app.get('/api/binance/config', (req, res) => {
       useTestnet,
     });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    res.json({ error: err.message });
   }
 });
 
@@ -193,7 +193,7 @@ app.get('/api/binance/account', async (req, res) => {
     res.json(accountState);
   } catch (err: any) {
     console.error('Error fetching Binance account data:', err);
-    res.status(500).json({ error: err.message });
+    res.json({ error: err.message });
   }
 });
 
@@ -203,7 +203,7 @@ app.post('/api/order/execute', async (req, res) => {
     const { asset, side, type, size, price, leverage, stopLoss, takeProfit } = req.body;
 
     if (!asset || !side || !size || !leverage) {
-      return res.status(400).json({ error: 'asset, side, size, and leverage are required.' });
+      return res.json({ error: 'asset, side, size, and leverage are required.' });
     }
 
     const result = await executeBinanceFuturesOrder({
@@ -220,7 +220,7 @@ app.post('/api/order/execute', async (req, res) => {
     res.json(result);
   } catch (err: any) {
     console.error('Binance Order Execution Error:', err);
-    res.status(500).json({ error: err.message });
+    res.json({ error: err.message });
   }
 });
 
@@ -230,14 +230,14 @@ app.post('/api/order/close', async (req, res) => {
     const { asset, side, size } = req.body;
 
     if (!asset || !side || !size) {
-      return res.status(400).json({ error: 'asset, side, and size are required.' });
+      return res.json({ error: 'asset, side, and size are required.' });
     }
 
     const result = await closeBinanceFuturesPosition(asset, side, parseFloat(size));
     res.json(result);
   } catch (err: any) {
     console.error('Binance Order Close Error:', err);
-    res.status(500).json({ error: err.message });
+    res.json({ error: err.message });
   }
 });
 
