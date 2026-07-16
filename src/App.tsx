@@ -108,11 +108,15 @@ export default function App() {
         const res = await fetch(
           `/api/market/state?asset=${currentAsset}&leverage=${account.leverage}&risk=${account.riskPercent}`
         );
+        if (!res.ok) {
+          throw new Error(`HTTP Error: ${res.status}`);
+        }
         const data: MarketState = await res.json();
         setMarketState(data);
         setLoadingMarket(false);
       } catch (err) {
         console.error('Error loading market state:', err);
+        setLoadingMarket(false);
       }
     };
 
@@ -447,16 +451,32 @@ export default function App() {
             </span>
           </div>
           <div className="h-8 w-px bg-[#1f242d] hidden md:block"></div>
-          <div className={`px-3 py-1 rounded text-xs border font-mono flex items-center gap-1.5 transition-all ${
-            executionMode === 'REAL'
-              ? 'bg-amber-500/10 border-amber-500/35 text-amber-400'
-              : 'bg-blue-500/10 border-blue-500/25 text-blue-400'
-          }`}>
+          <button
+            onClick={() => {
+              if (executionMode === 'SIMULATED') {
+                if (binanceConfig && binanceConfig.hasApiKey && binanceConfig.hasSecret) {
+                  setExecutionMode('REAL');
+                } else {
+                  alert(
+                    "BINANCE REAL TRADING LOCKED\n\nNo Binance API keys detected in your environment. Please set BINANCE_API_KEY and BINANCE_API_SECRET in your Vercel or local environment secrets to unlock live trading."
+                  );
+                }
+              } else {
+                setExecutionMode('SIMULATED');
+              }
+            }}
+            className={`px-3 py-1 rounded text-xs border font-mono flex items-center gap-1.5 transition-all cursor-pointer ${
+              executionMode === 'REAL'
+                ? 'bg-amber-500/10 border-amber-500/35 text-amber-400 hover:bg-amber-500/20'
+                : 'bg-blue-500/10 border-blue-500/25 text-blue-400 hover:bg-blue-500/20'
+            }`}
+            title="Click to toggle trading mode"
+          >
             <span className={`w-1.5 h-1.5 rounded-full ${
               executionMode === 'REAL' ? 'bg-amber-400 animate-pulse' : 'bg-blue-400 animate-pulse'
             }`}></span>
             MODE: <span className="font-extrabold uppercase">{executionMode}</span>
-          </div>
+          </button>
           <button
             onClick={() => {
               setInputBalance(account.walletBalance.toString());
