@@ -447,8 +447,15 @@ export default function App() {
             </span>
           </div>
           <div className="h-8 w-px bg-[#1f242d] hidden md:block"></div>
-          <div className="bg-[#1f242d] px-3 py-1 rounded text-xs border border-[#2d333b] font-mono text-gray-300">
-            API: <span className="text-blue-400 font-bold">CONNECTED</span>
+          <div className={`px-3 py-1 rounded text-xs border font-mono flex items-center gap-1.5 transition-all ${
+            executionMode === 'REAL'
+              ? 'bg-amber-500/10 border-amber-500/35 text-amber-400'
+              : 'bg-blue-500/10 border-blue-500/25 text-blue-400'
+          }`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${
+              executionMode === 'REAL' ? 'bg-amber-400 animate-pulse' : 'bg-blue-400 animate-pulse'
+            }`}></span>
+            MODE: <span className="font-extrabold uppercase">{executionMode}</span>
           </div>
           <button
             onClick={() => {
@@ -538,7 +545,7 @@ export default function App() {
             <div className="h-4 w-px bg-[#1f242d]" />
 
             {/* Active Guard Status */}
-            <div className="flex items-center">
+            <div className="flex items-center gap-1.5">
               {isLossLimitAlert || isDrawdownAlert ? (
                 <div className="bg-rose-500/10 border border-rose-500/20 text-rose-400 px-2 py-0.5 rounded flex items-center gap-1 text-[9px] font-semibold uppercase tracking-wider">
                   <ShieldAlert size={10} />
@@ -550,6 +557,15 @@ export default function App() {
                   <span>Risk Safe</span>
                 </div>
               )}
+              
+              <div className={`px-2 py-0.5 rounded flex items-center gap-1 text-[9px] font-semibold uppercase tracking-wider border transition-all ${
+                executionMode === 'REAL'
+                  ? 'bg-amber-500/15 border-amber-500/30 text-amber-400'
+                  : 'bg-blue-500/15 border-blue-500/25 text-blue-400'
+              }`}>
+                <span className="w-1 h-1 rounded-full bg-current animate-pulse"></span>
+                <span>{executionMode === 'REAL' ? 'Real Futures' : 'Simulated Paper'}</span>
+              </div>
             </div>
           </div>
 
