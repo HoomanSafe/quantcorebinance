@@ -1,4 +1,24 @@
-export type Asset = 'BTCUSDT' | 'ETHUSDT' | 'SOLUSDT' | 'BNBUSDT';
+export type Asset =
+  | 'BTCUSDT'
+  | 'ETHUSDT'
+  | 'SOLUSDT'
+  | 'BNBUSDT'
+  | 'XRPUSDT'
+  | 'ADAUSDT'
+  | 'DOGEUSDT'
+  | 'DOTUSDT'
+  | 'MATICUSDT'
+  | 'LTCUSDT'
+  | 'SHIBUSDT'
+  | 'AVAXUSDT'
+  | 'LINKUSDT'
+  | 'UNIUSDT'
+  | 'ATOMUSDT'
+  | 'NEARUSDT'
+  | 'APTUSDT'
+  | 'SUIUSDT'
+  | 'OPUSDT'
+  | 'ARBUSDT';
 
 export interface Candle {
   time: string; // HH:MM:SS or date

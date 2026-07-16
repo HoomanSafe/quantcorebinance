@@ -40,6 +40,10 @@ export default function App() {
   } | null>(null);
   const [executionMode, setExecutionMode] = useState<'SIMULATED' | 'REAL'>('SIMULATED');
 
+  // Balance settings modal
+  const [showBalanceModal, setShowBalanceModal] = useState(false);
+  const [inputBalance, setInputBalance] = useState('10000');
+
   // Fetch Binance API & Telegram Configuration from backend
   useEffect(() => {
     const fetchBinanceConfig = async () => {
@@ -362,6 +366,25 @@ export default function App() {
     }));
   };
 
+  const handleSetBalance = (amount: number) => {
+    setAccount((prev) => {
+      const positions = prev.positions;
+      const totalMarginUsed = positions.reduce((sum, p) => sum + p.margin, 0);
+      const totalUnrealizedPnl = positions.reduce((sum, p) => sum + p.unrealizedPnl, 0);
+      const marginBalance = parseFloat((amount + totalUnrealizedPnl).toFixed(2));
+      const availableBalance = parseFloat((marginBalance - totalMarginUsed).toFixed(2));
+
+      return {
+        ...prev,
+        walletBalance: amount,
+        marginBalance,
+        availableBalance,
+        dailyStartBalance: amount,
+      };
+    });
+    setShowBalanceModal(false);
+  };
+
   // Reset wallet to initial balance
   const handleResetWallet = () => {
     if (window.confirm('Reset simulated paper trading account to $10,000 USDT?')) {
@@ -428,10 +451,19 @@ export default function App() {
             API: <span className="text-blue-400 font-bold">CONNECTED</span>
           </div>
           <button
+            onClick={() => {
+              setInputBalance(account.walletBalance.toString());
+              setShowBalanceModal(true);
+            }}
+            className="text-[10px] bg-[#161b22] border border-[#30363d] hover:border-[#f3ba2f]/50 text-[#f3ba2f] hover:text-white px-2.5 py-1 rounded transition-all font-mono uppercase"
+          >
+            Set Balance
+          </button>
+          <button
             onClick={handleResetWallet}
             className="text-[10px] bg-[#161b22] border border-[#30363d] hover:border-yellow-500/40 text-gray-400 hover:text-white px-2.5 py-1 rounded transition-all font-mono uppercase"
           >
-            Reset Balance
+            Reset
           </button>
         </div>
       </header>
@@ -523,24 +555,25 @@ export default function App() {
 
           {/* Asset Selection */}
           <div className="flex items-center gap-2 self-stretch md:self-auto justify-between md:justify-start">
-            <span className="text-[10px] uppercase tracking-widest font-semibold text-gray-500 font-mono">
-              Feed:
+            <span className="text-[10px] uppercase tracking-widest font-semibold text-[#f3ba2f] font-mono">
+              Market Index:
             </span>
-            <div className="flex gap-1">
-              {(['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT'] as Asset[]).map((asset) => (
-                <button
-                  key={asset}
-                  onClick={() => setCurrentAsset(asset)}
-                  className={`px-2 py-0.5 rounded text-[10px] font-bold font-mono border transition-all ${
-                    currentAsset === asset
-                      ? 'bg-[#f3ba2f]/10 border-[#f3ba2f]/40 text-[#f3ba2f] font-extrabold shadow-sm'
-                      : 'bg-[#161b22] border-[#30363d] text-gray-400 hover:text-gray-300'
-                  }`}
-                >
-                  {asset.replace('USDT', '')}
-                </button>
+            <select
+              value={currentAsset}
+              onChange={(e) => setCurrentAsset(e.target.value as Asset)}
+              className="bg-[#161b22] border border-[#30363d] text-[#f3ba2f] text-xs font-bold font-mono px-3 py-1 rounded focus:outline-none focus:border-[#f3ba2f]/60 cursor-pointer"
+            >
+              {[
+                'BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT', 'ADAUSDT',
+                'DOGEUSDT', 'DOTUSDT', 'MATICUSDT', 'LTCUSDT', 'SHIBUSDT', 'AVAXUSDT',
+                'LINKUSDT', 'UNIUSDT', 'ATOMUSDT', 'NEARUSDT', 'APTUSDT', 'SUIUSDT',
+                'OPUSDT', 'ARBUSDT'
+              ].map((asset) => (
+                <option key={asset} value={asset} className="bg-[#0d1117] text-gray-300 font-mono">
+                  {asset.replace('USDT', '')} / USDT
+                </option>
               ))}
-            </div>
+            </select>
           </div>
         </div>
       </nav>
@@ -711,6 +744,86 @@ export default function App() {
           <span className="text-[#f3ba2f]">V2.4.1 Stable Build</span>
         </div>
       </footer>
+
+      {/* Balance settings modal */}
+      {showBalanceModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-[#0d1117] border border-[#30363d] rounded-lg p-6 max-w-sm w-full shadow-2xl space-y-4">
+            <div className="flex justify-between items-center border-b border-[#1f242d] pb-3">
+              <h3 className="text-xs font-bold text-white uppercase tracking-wider font-mono flex items-center gap-2">
+                <Wallet size={14} className="text-[#f3ba2f]" />
+                Balance Settings
+              </h3>
+              <button
+                onClick={() => setShowBalanceModal(false)}
+                className="text-gray-500 hover:text-white text-xs font-mono uppercase cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <label className="text-[10px] text-gray-400 font-mono uppercase">Custom Wallet Balance (USDT)</label>
+              <input
+                type="number"
+                value={inputBalance}
+                onChange={(e) => setInputBalance(e.target.value)}
+                placeholder="10000"
+                className="w-full bg-[#161b22] border border-[#30363d] rounded px-3 py-2 text-sm font-mono text-white focus:outline-none focus:border-[#f3ba2f] focus:ring-1 focus:ring-[#f3ba2f]/30"
+              />
+
+              <div className="grid grid-cols-4 gap-1.5 pt-1">
+                {['1000', '5000', '10000', '50000'].map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => setInputBalance(preset)}
+                    className="py-1 rounded bg-[#161b22] border border-[#30363d] text-[10px] font-mono hover:border-[#f3ba2f]/40 text-gray-400 hover:text-white transition-all cursor-pointer"
+                  >
+                    ${parseInt(preset).toLocaleString()}
+                  </button>
+                ))}
+              </div>
+              <div className="grid grid-cols-2 gap-1.5 pt-1">
+                {['100000', '500000'].map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => setInputBalance(preset)}
+                    className="py-1 rounded bg-[#161b22] border border-[#30363d] text-[10px] font-mono hover:border-[#f3ba2f]/40 text-gray-400 hover:text-white transition-all cursor-pointer"
+                  >
+                    ${parseInt(preset).toLocaleString()}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowBalanceModal(false)}
+                className="flex-1 py-1.5 rounded border border-[#30363d] hover:bg-[#161b22] text-[11px] font-mono uppercase text-gray-400 transition-all cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const val = parseFloat(inputBalance);
+                  if (isNaN(val) || val <= 0) {
+                    alert('Please enter a valid positive number');
+                    return;
+                  }
+                  handleSetBalance(val);
+                }}
+                className="flex-1 py-1.5 rounded bg-[#f3ba2f] text-[#0a0c10] font-extrabold text-[11px] font-mono uppercase hover:bg-[#d49e1e] transition-all cursor-pointer"
+              >
+                Apply Balance
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
