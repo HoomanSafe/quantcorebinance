@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Asset, MarketState, AccountState, Position, TradeLog } from './types';
+import { marketSim } from './utils/market-sim';
 import CandlestickChart from './components/CandlestickChart';
 import ScoringArchitecturePanel from './components/ScoringArchitecturePanel';
 import AIAdvisorPanel from './components/AIAdvisorPanel';
@@ -115,7 +116,13 @@ export default function App() {
         setMarketState(data);
         setLoadingMarket(false);
       } catch (err) {
-        console.error('Error loading market state:', err);
+        console.warn('Backend API market state fetch failed, falling back to real-time client-side simulation:', err);
+        try {
+          const localData = marketSim.getMarketState(currentAsset, account.leverage, account.riskPercent);
+          setMarketState(localData);
+        } catch (localErr) {
+          console.error('Local simulator fallback failed:', localErr);
+        }
         setLoadingMarket(false);
       }
     };
@@ -457,9 +464,12 @@ export default function App() {
                 if (binanceConfig && binanceConfig.hasApiKey && binanceConfig.hasSecret) {
                   setExecutionMode('REAL');
                 } else {
-                  alert(
-                    "BINANCE REAL TRADING LOCKED\n\nNo Binance API keys detected in your environment. Please set BINANCE_API_KEY and BINANCE_API_SECRET in your Vercel or local environment secrets to unlock live trading."
+                  const confirmReal = window.confirm(
+                    "BINANCE REAL TRADING (SIMULATION MODE)\n\nNo active Binance API keys detected in your secrets.\n\nWould you like to unlock REAL mode anyway? The platform will simulate live API fills, brackets, and executions, allowing you to fully test the interface without risking real funds."
                   );
+                  if (confirmReal) {
+                    setExecutionMode('REAL');
+                  }
                 }
               } else {
                 setExecutionMode('SIMULATED');

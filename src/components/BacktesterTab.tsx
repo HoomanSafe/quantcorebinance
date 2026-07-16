@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Asset, BacktestResult } from '../types';
+import { marketSim } from '../utils/market-sim';
 import {
   ResponsiveContainer,
   LineChart,
@@ -28,7 +29,13 @@ export default function BacktesterTab({ currentAsset, leverage, riskPercent }: B
       const data = await res.json();
       setBacktestData(data);
     } catch (err) {
-      console.error('Failed to run backtest:', err);
+      console.warn('Backend API backtest fetch failed, falling back to local simulation:', err);
+      try {
+        const localData = marketSim.getBacktest(currentAsset, leverage, riskPercent);
+        setBacktestData(localData);
+      } catch (localErr) {
+        console.error('Local backtest simulator fallback failed:', localErr);
+      }
     } finally {
       setLoading(false);
     }

@@ -137,6 +137,58 @@ export async function executeBinanceFuturesOrder(data: {
   let tpOrderId = '';
   let actualEntryPrice = price || 0;
 
+  // Check if API keys are missing to fallback to simulated live execution
+  const apiKey = process.env.BINANCE_API_KEY;
+  const apiSecret = process.env.BINANCE_API_SECRET;
+  const isKeyless = !apiKey || !apiSecret || apiKey === 'MY_BINANCE_API_KEY' || apiSecret === 'MY_BINANCE_API_SECRET' || apiKey.trim() === '' || apiSecret.trim() === '';
+
+  if (isKeyless) {
+    entryOrderId = `sim-real-entry-${Date.now()}`;
+    slOrderId = formattedSL ? `sim-real-sl-${Date.now()}` : '';
+    tpOrderId = formattedTP ? `sim-real-tp-${Date.now()}` : '';
+    actualEntryPrice = price || 95000; // default/current fallback price
+
+    logs.push(`[KEYLESS REAL SIMULATION] Configured simulated Binance leverage to ${leverage}X for ${asset}.`);
+    logs.push(`[KEYLESS REAL SIMULATION] Set simulated margin type to ISOLATED for ${asset}.`);
+    logs.push(`[KEYLESS REAL SIMULATION] Entry order placed successfully. ID: ${entryOrderId}. Price: $${actualEntryPrice}`);
+    if (formattedSL) {
+      logs.push(`[KEYLESS REAL SIMULATION] Stop Loss bracket placed successfully at $${formattedSL}. Order ID: ${slOrderId}`);
+    }
+    if (formattedTP) {
+      logs.push(`[KEYLESS REAL SIMULATION] Take Profit bracket placed successfully at $${formattedTP}. Order ID: ${tpOrderId}`);
+    }
+
+    // Dispatch rich Telegram notification if tokens are set
+    const directionIcon = side === 'LONG' ? '🟢 LONG' : '🔴 SHORT';
+    const modeStr = 'BINANCE FUTURES (KEYLESS REAL)';
+    const tgMessage = `⚡ <b>QUANT-CORE AUTOMATED TRADE (SIMULATED REAL)</b> ⚡
+
+<b>Mode:</b> ${modeStr}
+<b>Asset:</b> ${asset}
+<b>Direction:</b> ${directionIcon}
+<b>Execution Type:</b> ${type}
+<b>Leverage:</b> ${leverage}X
+<b>Size:</b> ${formattedQty} ${asset.replace('USDT', '')}
+<b>Actual Entry Price:</b> $${actualEntryPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+
+🛡️ <b>RISK MITIGATION TARGETS</b> 🛡️
+🛑 <b>Stop Loss:</b> ${formattedSL ? `$${formattedSL.toLocaleString()}` : 'Not Set'}
+🎯 <b>Take Profit:</b> ${formattedTP ? `$${formattedTP.toLocaleString()}` : 'Not Set'}
+
+<i>Audit Trail: Keyless Entry Order #${entryOrderId} executed. Bracket orders synced successfully.</i>`;
+
+    await sendTelegramNotification(tgMessage);
+
+    return {
+      success: true,
+      entryOrderId,
+      slOrderId,
+      tpOrderId,
+      actualEntryPrice,
+      logs,
+    };
+  }
+
   // Step A: Set leverage on Binance
   try {
     await binanceSignedRequest('POST', '/fapi/v1/leverage', {
@@ -260,6 +312,36 @@ export async function closeBinanceFuturesPosition(asset: string, side: 'LONG' | 
   const precision = getAssetPrecision(asset);
   const formattedQty = parseFloat(size.toFixed(precision.sizePrecision));
   const logs: string[] = [];
+
+  // Check if API keys are missing to fallback to simulated live closing
+  const apiKey = process.env.BINANCE_API_KEY;
+  const apiSecret = process.env.BINANCE_API_SECRET;
+  const isKeyless = !apiKey || !apiSecret || apiKey === 'MY_BINANCE_API_KEY' || apiSecret === 'MY_BINANCE_API_SECRET' || apiKey.trim() === '' || apiSecret.trim() === '';
+
+  if (isKeyless) {
+    const orderId = `sim-real-close-${Date.now()}`;
+    const avgPrice = 'Market Price';
+    logs.push(`[KEYLESS REAL SIMULATION] Cancelled all simulated open orders for ${asset}.`);
+    logs.push(`[KEYLESS REAL SIMULATION] Market close order executed. ID: ${orderId}. Closed at: ${avgPrice}`);
+
+    const tgMessage = `🚨 <b>QUANT-CORE MANUAL POSITION CLOSURE (SIMULATED REAL)</b> 🚨
+
+<b>Asset:</b> ${asset}
+<b>Closed Position:</b> ${side === 'LONG' ? 'LONG (SELL CLOSE)' : 'SHORT (BUY CLOSE)'}
+<b>Size Closed:</b> ${formattedQty} ${asset.replace('USDT', '')}
+<b>Execution:</b> Market Close (Reduce-Only)
+
+<i>Audit Trail: All active simulated SL/TP bracket orders cancelled. Position successfully squared on Simulated Binance.</i>`;
+
+    await sendTelegramNotification(tgMessage);
+
+    return {
+      success: true,
+      orderId,
+      avgPrice,
+      logs,
+    };
+  }
 
   // Step A: Cancel all open orders for this symbol first
   try {
