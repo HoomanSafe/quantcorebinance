@@ -117,39 +117,39 @@ export default function OrderTerminal({
             </span>
           </div>
 
-          {binanceConfig && binanceConfig.hasApiKey && binanceConfig.hasSecret ? (
-            <div className="grid grid-cols-2 gap-2 p-0.5 rounded bg-[#0a0c10] border border-[#1f242d]">
-              <button
-                type="button"
-                onClick={() => onSetExecutionMode('SIMULATED')}
-                className={`py-1 rounded text-[10px] font-bold font-mono transition-all uppercase cursor-pointer ${
-                  executionMode === 'SIMULATED'
-                    ? 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
-                    : 'text-gray-500 hover:text-gray-300'
-                }`}
-              >
-                Simulate (Paper)
-              </button>
-              <button
-                type="button"
-                onClick={() => onSetExecutionMode('REAL')}
-                className={`py-1 rounded text-[10px] font-bold font-mono transition-all uppercase cursor-pointer ${
-                  executionMode === 'REAL'
-                    ? 'bg-green-500/10 text-green-400 border border-green-500/30 font-bold shadow'
-                    : 'text-gray-500 hover:text-gray-300'
-                }`}
-              >
-                Binance Live
-              </button>
-            </div>
-          ) : (
-            <div className="bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[9.5px] px-2.5 py-2 rounded font-mono leading-relaxed space-y-1">
-              <div className="font-bold flex items-center gap-1 uppercase">
-                <AlertCircle size={11} className="shrink-0" />
+          <div className="grid grid-cols-2 gap-2 p-0.5 rounded bg-[#0a0c10] border border-[#1f242d]">
+            <button
+              type="button"
+              onClick={() => onSetExecutionMode('SIMULATED')}
+              className={`py-1 rounded text-[10px] font-bold font-mono transition-all uppercase cursor-pointer ${
+                executionMode === 'SIMULATED'
+                  ? 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
+                  : 'text-gray-500 hover:text-gray-300'
+              }`}
+            >
+              Simulate (Paper)
+            </button>
+            <button
+              type="button"
+              onClick={() => onSetExecutionMode('REAL')}
+              className={`py-1 rounded text-[10px] font-bold font-mono transition-all uppercase cursor-pointer ${
+                executionMode === 'REAL'
+                  ? 'bg-green-500/10 text-green-400 border border-green-500/30 font-bold shadow'
+                  : 'text-gray-500 hover:text-gray-300'
+              }`}
+            >
+              Binance Live {(!binanceConfig || !binanceConfig.hasApiKey || !binanceConfig.hasSecret) ? '(Simulated)' : ''}
+            </button>
+          </div>
+
+          {(!binanceConfig || !binanceConfig.hasApiKey || !binanceConfig.hasSecret) && (
+            <div className="bg-amber-500/5 border border-amber-500/10 text-amber-400/90 text-[8.5px] px-2.5 py-1.5 rounded font-mono leading-relaxed space-y-1">
+              <div className="font-bold flex items-center gap-1 uppercase text-[9px]">
+                <AlertCircle size={10} className="shrink-0 text-amber-400" />
                 <span>Binance Live API Offline</span>
               </div>
-              <p className="text-gray-400 text-[8.5px] leading-tight normal-case">
-                To enable live trading with automatic SL/TP placement, add <b>BINANCE_API_KEY</b> and <b>BINANCE_API_SECRET</b> to your environment secrets.
+              <p className="text-gray-400 text-[8px] leading-tight normal-case">
+                Running in <b>Simulation Mode</b>. Fills live simulated bracket orders. Add <b>BINANCE_API_KEY</b> to your secrets to unlock live funds.
               </p>
             </div>
           )}

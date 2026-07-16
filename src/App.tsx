@@ -41,6 +41,58 @@ export default function App() {
   } | null>(null);
   const [executionMode, setExecutionMode] = useState<'SIMULATED' | 'REAL'>('SIMULATED');
 
+  // Custom Alert & Confirm Modal Dialog state
+  const [appModal, setAppModal] = useState<{
+    show: boolean;
+    title: string;
+    message: string;
+    type: 'alert' | 'confirm';
+    onConfirm: () => void;
+    onCancel?: () => void;
+  } | null>(null);
+
+  const showAlert = (title: string, message: string) => {
+    setAppModal({
+      show: true,
+      title,
+      message,
+      type: 'alert',
+      onConfirm: () => setAppModal(null),
+    });
+  };
+
+  const showConfirm = (title: string, message: string, onConfirm: () => void) => {
+    setAppModal({
+      show: true,
+      title,
+      message,
+      type: 'confirm',
+      onConfirm: () => {
+        onConfirm();
+        setAppModal(null);
+      },
+      onCancel: () => setAppModal(null),
+    });
+  };
+
+  const handleSetExecutionMode = (mode: 'SIMULATED' | 'REAL') => {
+    if (mode === 'REAL') {
+      if (binanceConfig && binanceConfig.hasApiKey && binanceConfig.hasSecret) {
+        setExecutionMode('REAL');
+      } else {
+        showConfirm(
+          "BINANCE REAL TRADING (SIMULATION MODE)",
+          "No active Binance API keys detected in your secrets.\n\nWould you like to unlock REAL mode anyway? The platform will simulate live API fills, bracket placement, and trade execution, allowing you to test the interface without risking real funds.",
+          () => {
+            setExecutionMode('REAL');
+          }
+        );
+      }
+    } else {
+      setExecutionMode('SIMULATED');
+    }
+  };
+
   // Balance settings modal
   const [showBalanceModal, setShowBalanceModal] = useState(false);
   const [inputBalance, setInputBalance] = useState('10000');
@@ -245,7 +297,7 @@ export default function App() {
 
         const result = await response.json();
         if (!response.ok) {
-          alert(`Binance Execution Error: ${result.error || 'Unknown Error'}`);
+          showAlert("BINANCE EXECUTION ERROR", result.error || 'Unknown Error');
           return;
         }
 
@@ -255,10 +307,13 @@ export default function App() {
         tpOrderId = result.tpOrderId;
         entryPrice = result.actualEntryPrice || entryPrice;
 
-        alert(`AUTOMATED ORDER FILLED ON BINANCE!\n\n- Symbol: ${newPosData.asset}\n- Entry Price: $${entryPrice}\n- SL Target: ${newPosData.stopLoss ? '$' + newPosData.stopLoss : 'None'}\n- TP Target: ${newPosData.takeProfit ? '$' + newPosData.takeProfit : 'None'}\n- Telegram Alert dispatched successfully.`);
+        showAlert(
+          "AUTOMATED ORDER FILLED ON BINANCE",
+          `• Asset: ${newPosData.asset}\n• Entry Price: $${entryPrice}\n• SL Target: ${newPosData.stopLoss ? '$' + newPosData.stopLoss : 'None'}\n• TP Target: ${newPosData.takeProfit ? '$' + newPosData.takeProfit : 'None'}\n\nTelegram notification alert has been dispatched successfully.`
+        );
       } catch (err: any) {
         console.error('Error executing Binance order:', err);
-        alert(`Failed to execute order on Binance: ${err.message}`);
+        showAlert("BINANCE ORDER FAILURE", `Failed to execute order on Binance: ${err.message}`);
         return;
       }
     }
@@ -294,39 +349,47 @@ export default function App() {
   };
 
   // Close position manually (handles simulated and real Binance closing)
-  const handleClosePosition = async (id: string) => {
+  const handleClosePosition = (id: string) => {
     const posToClose = account.positions.find((p) => p.id === id);
     if (!posToClose) return;
 
     if (posToClose.isReal) {
-      const confirmClose = window.confirm(`Confirm PANIC MARKET CLOSE for real Binance position: ${posToClose.asset}?\nThis will cancel all open SL/TP bracket orders and fully square the position.`);
-      if (!confirmClose) return;
+      showConfirm(
+        "CONFIRM PANIC MARKET CLOSE",
+        `Are you sure you want to execute a PANIC MARKET CLOSE for your real Binance position on ${posToClose.asset}?\n\nThis will cancel all open SL/TP bracket orders and fully square the position immediately.`,
+        async () => {
+          try {
+            const response = await fetch('/api/order/close', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                asset: posToClose.asset,
+                side: posToClose.side,
+                size: posToClose.size,
+              }),
+            });
 
-      try {
-        const response = await fetch('/api/order/close', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            asset: posToClose.asset,
-            side: posToClose.side,
-            size: posToClose.size,
-          }),
-        });
+            const result = await response.json();
+            if (!response.ok) {
+              showAlert("BINANCE CLOSE ERROR", result.error || 'Unknown Error');
+              return;
+            }
 
-        const result = await response.json();
-        if (!response.ok) {
-          alert(`Binance Close Error: ${result.error || 'Unknown Error'}`);
-          return;
+            showAlert("POSITION CLOSED", `Real position for ${posToClose.asset} successfully closed on Binance. All bracket orders have been cancelled.`);
+          } catch (err: any) {
+            console.error('Error closing real position:', err);
+            showAlert("BINANCE CLOSE FAILURE", `Failed to close position on Binance: ${err.message}`);
+            return;
+          }
+          executeClosePositionState(id);
         }
-
-        alert(`Real position for ${posToClose.asset} closed on Binance. Bracket orders cancelled.`);
-      } catch (err: any) {
-        console.error('Error closing real position:', err);
-        alert(`Failed to close position on Binance: ${err.message}`);
-        return;
-      }
+      );
+    } else {
+      executeClosePositionState(id);
     }
+  };
 
+  const executeClosePositionState = (id: string) => {
     setAccount((prev) => {
       const pos = prev.positions.find((p) => p.id === id);
       if (!pos) return prev;
@@ -398,21 +461,25 @@ export default function App() {
 
   // Reset wallet to initial balance
   const handleResetWallet = () => {
-    if (window.confirm('Reset simulated paper trading account to $10,000 USDT?')) {
-      setAccount({
-        walletBalance: 10000,
-        marginBalance: 10000,
-        availableBalance: 10000,
-        unrealizedPnl: 0,
-        positions: [],
-        tradeHistory: [],
-        dailyDrawdownLimit: 5.0,
-        dailyLossLimit: 500,
-        dailyStartBalance: 10000,
-        leverage: 10,
-        riskPercent: 1.5,
-      });
-    }
+    showConfirm(
+      "RESET WALLET BALANCE",
+      "Are you sure you want to reset your simulated paper trading account balance to $10,000 USDT? This will clear any open simulated positions.",
+      () => {
+        setAccount({
+          walletBalance: 10000,
+          marginBalance: 10000,
+          availableBalance: 10000,
+          unrealizedPnl: 0,
+          positions: [],
+          tradeHistory: [],
+          dailyDrawdownLimit: 5.0,
+          dailyLossLimit: 500,
+          dailyStartBalance: 10000,
+          leverage: 10,
+          riskPercent: 1.5,
+        });
+      }
+    );
   };
 
   // Calculate stats
@@ -459,22 +526,7 @@ export default function App() {
           </div>
           <div className="h-8 w-px bg-[#1f242d] hidden md:block"></div>
           <button
-            onClick={() => {
-              if (executionMode === 'SIMULATED') {
-                if (binanceConfig && binanceConfig.hasApiKey && binanceConfig.hasSecret) {
-                  setExecutionMode('REAL');
-                } else {
-                  const confirmReal = window.confirm(
-                    "BINANCE REAL TRADING (SIMULATION MODE)\n\nNo active Binance API keys detected in your secrets.\n\nWould you like to unlock REAL mode anyway? The platform will simulate live API fills, brackets, and executions, allowing you to fully test the interface without risking real funds."
-                  );
-                  if (confirmReal) {
-                    setExecutionMode('REAL');
-                  }
-                }
-              } else {
-                setExecutionMode('SIMULATED');
-              }
-            }}
+            onClick={() => handleSetExecutionMode(executionMode === 'SIMULATED' ? 'REAL' : 'SIMULATED')}
             className={`px-3 py-1 rounded text-xs border font-mono flex items-center gap-1.5 transition-all cursor-pointer ${
               executionMode === 'REAL'
                 ? 'bg-amber-500/10 border-amber-500/35 text-amber-400 hover:bg-amber-500/20'
@@ -670,7 +722,7 @@ export default function App() {
                     onUpdateAccount={handleUpdateAccount}
                     onAddPosition={handleAddPosition}
                     executionMode={executionMode}
-                    onSetExecutionMode={setExecutionMode}
+                    onSetExecutionMode={handleSetExecutionMode}
                     binanceConfig={binanceConfig}
                   />
 
@@ -702,9 +754,11 @@ export default function App() {
                   </div>
                   <button
                     onClick={() => {
-                      if (window.confirm('Clear all session trade logs?')) {
-                        handleUpdateAccount({ tradeHistory: [] });
-                      }
+                      showConfirm(
+                        "CLEAR SESSION LOGS",
+                        "Are you sure you want to clear all historic session trade logs? This action cannot be undone.",
+                        () => handleUpdateAccount({ tradeHistory: [] })
+                      );
                     }}
                     className="text-[10px] border border-rose-500/20 hover:border-rose-500/40 text-rose-400 hover:bg-rose-500/5 px-2.5 py-1 rounded transition-all font-mono uppercase tracking-wider"
                   >
@@ -857,7 +911,7 @@ export default function App() {
                 onClick={() => {
                   const val = parseFloat(inputBalance);
                   if (isNaN(val) || val <= 0) {
-                    alert('Please enter a valid positive number');
+                    showAlert('INVALID BALANCE', 'Please enter a valid positive balance number.');
                     return;
                   }
                   handleSetBalance(val);
@@ -865,6 +919,46 @@ export default function App() {
                 className="flex-1 py-1.5 rounded bg-[#f3ba2f] text-[#0a0c10] font-extrabold text-[11px] font-mono uppercase hover:bg-[#d49e1e] transition-all cursor-pointer"
               >
                 Apply Balance
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Custom Application Dialog (Alert/Confirm) */}
+      {appModal?.show && (
+        <div className="fixed inset-0 bg-[#0a0c10]/85 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
+          <div className="bg-[#0d1117] border border-[#f3ba2f]/30 max-w-md w-full rounded-md shadow-2xl p-5 overflow-hidden">
+            <div className="flex items-center gap-2.5 border-b border-[#1f242d] pb-3 mb-4">
+              <span className="w-2 h-2 rounded-full bg-[#f3ba2f] animate-pulse"></span>
+              <h3 className="text-xs font-bold text-[#f3ba2f] uppercase tracking-wider font-mono">
+                {appModal.title}
+              </h3>
+            </div>
+            
+            <div className="text-xs text-gray-300 font-mono leading-relaxed whitespace-pre-wrap mb-5">
+              {appModal.message}
+            </div>
+
+            <div className="flex gap-2">
+              {appModal.type === 'confirm' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (appModal.onCancel) appModal.onCancel();
+                    setAppModal(null);
+                  }}
+                  className="flex-1 py-1.5 rounded border border-[#30363d] hover:bg-[#161b22] text-[10px] font-bold font-mono uppercase text-gray-400 transition-all cursor-pointer"
+                >
+                  Cancel
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={appModal.onConfirm}
+                className="flex-1 py-1.5 rounded bg-[#f3ba2f] hover:bg-[#d49e1e] text-[#0a0c10] font-extrabold text-[10px] font-bold font-mono uppercase transition-all cursor-pointer text-center"
+              >
+                Confirm
               </button>
             </div>
           </div>
